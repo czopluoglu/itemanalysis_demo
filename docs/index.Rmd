@@ -1,0 +1,220 @@
+---
+title: Introduction to Item Analysis Using `itemanalysis` Package
+subtitle:
+author:
+  name: Cengiz Zopluoglu
+  affiliation: University of Oregon
+date: 09/7/2024
+output: 
+  html_document:
+    keep_md: false
+    theme: journal
+    highlight: haddock
+    code_folding: show
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+always_allow_html: true
+urlcolor: blue
+mainfont: cochineal
+sansfont: Fira Sans
+monofont: Fira Code ## Although, see: https://tex.stackexchange.com/q/294362
+
+## Automatically knit to both formats:
+knit: (function(inputFile, encoding) {
+ rmarkdown::render(inputFile, encoding = encoding, 
+ output_format = 'all') 
+ })
+---
+
+```{r klippy, echo=FALSE, include=TRUE}
+klippy::klippy(position=c('top','right'),color='#33C1FF')
+```
+
+
+<style>
+.list-group-item.active, .list-group-item.active:focus, .list-group-item.active:hover {
+    z-index: 2;
+    color: #fff;
+    background-color: #33C1FF;
+    border-color: #97CAEF;
+}
+
+</style>
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = "",fig.align='center',message = FALSE,warning = FALSE)
+require(here)
+require(ggplot2)
+require(plot3D)
+require(kableExtra)
+require(knitr)
+require(giski)
+require(magick)
+options(scipen=99)
+
+```
+
+`r paste('[Updated:',format(Sys.time(),'%a, %b %d, %Y - %H:%M:%S'),']')`
+
+<font color="black">
+
+# 1. Overview
+
+The itemanalysis package in R is designed to facilitate classical item analysis for both multiple-choice (dichotomous) and polytomous (rating scale) test items. Classical Test Theory (CTT) provides essential item statistics such as item difficulty, discrimination, and distractor analysis, which help in evaluating the quality of test items.
+
+This tutorial will guide you through running item analysis for both dichotomous and polytomous datasets using the itemanalysis package.
+
+(*Note that there are much better tools available for free to run classical item analysis. This package was originally developed in 2013 to supplement the content I was teaching in a measurement course at the University of Miami. Therefore, it is customized and aligned with the content I taught.*) 
+
+# 2. Installation and Setup
+
+Before starting, you need to install and load the package. Since the package may not be available on CRAN, you can download it from the source or GitHub (if applicable) or use the pre-installed package.
+
+```{r}
+# Install the package (if not already installed)
+# install.packages("itemanalysis")
+
+# Load the package
+require(itemanalysis)
+
+```
+
+# 3. Running Item Analysis on Dichotomously Scored Items
+
+We will use a multiple-choice dataset where each item has one correct answer, and the responses are nominal (e.g., A, B, C, D). The dataset `dichotomous` is included in the package. It contains 6,000 rows (examinees) and 56 columns (items), with each cell representing the nominal response to a particular item.
+
+```{r}
+
+# Load the dataset
+data(dichotomous)
+head(dichotomous)
+
+```
+
+The answer key is a vector that specifies the correct answer for each item.
+
+```{r}
+# Define the correct answers for each item
+
+key <- c("A","D","C","B","C","B","C","D","A","D","C","A","D","C","A",
+         "B","D","B","A","C","A","A","C","B","C","B","D","A","A","A",
+         "C","B","B","A","B","D","D","A","D","C","D","A","B","B","C",
+         "D","B","C","C","B","D","A","C","B","A","D")
+```
+
+Use the `itemanalysis1` function to run the analysis. You can customize parameters such as the number of score groups (`ngroup`) and whether to apply correction for point-biserial correlation.
+
+```{r}
+item.analysis <- itemanalysis1(
+  data       = dichotomous,             # a data frame object with N rows and m columns
+  key        = key,                     # a vector of correct answers with length m
+  options    = c("A", "B", "C", "D"),   # a vector of available response options
+  ngroup     = 10,                      # number of score groups to be use for plotting the item trace lines
+  correction = F,                       # if it is TRUE, then an adjustment is made for point-biserial correlation
+                                        # recommended for tests with small number of items
+  span.par   = 0.3,                     #	a smoothing parameter to pass to ggplots when creating empirical item trace lines,
+  verbose    = T                        # if it is TRUE, text output is printed in console
+)
+```
+
+The function prints the output in the console by default. If you want to turn this feature off, you can add `verbose=F` argument. In either case, you can always access to the outputs from the function as separate data objects using the following code.
+
+```{r, eval=FALSE, echo=TRUE}
+
+item.analysis$item.stat  # returns a matrix of basic item statistics
+      
+item.analysis$dist.sel   # returns a matrix of distractor selection proportion statistics
+      
+item.analysis$dist.disc  # returns a matrix of point-biserial statistics for distractors
+```
+
+The function also creates and saves the item trace lines for each item in the `plot` output, a list object, that can be accessed as follows. A default value of 0.3 is used for the `span.par` argument in the function and this is being passed to the `ggplot` pacage for smoothing the lines. If you'd like to change it, you can add `span.par=` argument with a custom value to the function.
+
+```{r}
+# Plot item trace lines for the first item
+item.analysis$plots[[1]]
+```
+
+```{r}
+# Plot item trace lines for the second item
+item.analysis$plots[[2]]  
+```
+
+# 4. Running Item Analysis on Polytomously Scored Items
+
+Next, we'll analyze a dataset where the responses are polytomous, meaning that they use multiple response categories such as those found in rating scales (e.g., Likert scales). The example below uses the TIMSS 2011 USA dataset (`timss2011_usa`), which includes items measuring attitudes towards mathematics.
+
+The items are as follows:
+
+- Q14A, I enjoy learning mathematics
+
+- Q14B, I wish have not to study Math
+
+- Q14C, Mathematics is boring
+
+- Q14D, I learn interesting things in mathematics class
+
+- Q14E, I like mathematics
+
+- Q14F, I think it's important to do well in mathematics
+
+Before analysis, note that Q14B and Q14C must be reverse coded to align with the other items. These two items reflect negative attitudes towards mathematics, whereas the other four reflect positive attitudes.
+
+This dataset, which is included in the package, contains responses to six items. Each item is scored on a scale from 0 to 3, where 0 indicates "strongly disagree" and 3 indicates "strongly agree."
+
+```{r}
+# Load the dataset
+data(timss2011_usa)
+head(timss2011_usa)
+
+
+#  Two items needs to be reverse coded for alignment 
+
+timss2011_usa$Q14B <- recode(var = timss2011_usa$Q14B,
+                             recodes = "c(0)=3;c(1)=2;c(2)=1;c(3)=0")
+
+timss2011_usa$Q14C <- recode(var = timss2011_usa$Q14C,
+                             recodes = "c(0)=3;c(1)=2;c(2)=1;c(3)=0")
+
+```
+
+Use the `itemanalysis2` function to run the analysis for polytomous items. You can specify response categories using the options argument.
+
+```{r}
+# Run item analysis for polytomous items
+item.analysis.poly <- itemanalysis2(
+  data       = timss2011_usa, # a data frame object with N rows and m columns
+  options    = c(0, 1, 2, 3), # a vector of numerical code of the response categories available in the data
+  ngroup     = 10,            # number of score groups to be use for plotting the item trace lines
+  correction = T,             # if it is TRUE, then an adjustment is made for point-biserial correlation
+                              # recommended for scale with small number items
+  span.par   = .3,            # a smoothing parameter to pass to ggplots when creating empirical item trace lines
+  verbose    = T              # if it is TRUE, text output is printed in console.
+)
+```
+
+The function similarly prints the output in the console by default. If you want to turn this feature off, you can add verbose=F argument. In either case, you can always access to the outputs from the function as separate data objects using the following code.
+
+```{r,eval=FALSE}
+
+item.analysis.poly$item.stat  # returns a matrix of basic item statistics
+      
+item.analysis.poly$dist.sel   # returns a matrix of distractor selection proportion statistics
+      
+item.analysis.poly$dist.disc  # returns a matrix of point-biserial statistics for distractors
+
+```
+
+The function similarly creates and saves the item trace lines for each item that can be accessed as follows. A default value of 0.3 is used for the span.par argument in the function and this is being passed to the ggplot pacage for smoothing the lines. If you’d like to change it, you can add span.par= argument with a custom value to the function.
+
+```{r}
+# Plot item trace lines for the first item
+item.analysis.poly$plots[[1]] 
+```
+
+</font>
+
+
+
